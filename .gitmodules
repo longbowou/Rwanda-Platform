@@ -1,0 +1,9 @@
+[submodule "app"]
+	path = app
+	url = git@github.com:longbowou/Rwanda.git
+[submodule "account"]
+	path = account
+	url = git@github.com:longbowou/Rwanda-Account.git
+[submodule "admin"]
+	path = admin
+	url = git@github.com:longbowou/Rwanda-Admin.git

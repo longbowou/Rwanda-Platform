@@ -1,0 +1,138 @@
+version: '3.9'
+
+services:
+  app:
+    build: app
+    command: gunicorn rwanda.asgi -w 5 --threads 5 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --preload --timeout 60 --graceful-timeout 60
+    volumes:
+      - ./app:/app
+    depends_on:
+      - db
+      - pgadmin
+      - worker
+      - scheduler
+    env_file: app/.env
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    env_file: app/.env
+    volumes:
+      - db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    env_file: app/.env
+    depends_on:
+      - db
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rwanda-pgadmin.rule=Host(`pgadmin.rwanda.danielblandes.com`)
+      - traefik.http.routers.rwanda-pgadmin.tls=true
+      - traefik.http.routers.rwanda-pgadmin.tls.certresolver=le
+    networks:
+      - default
+      - traefik-proxy
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis:/data
+    restart: unless-stopped
+
+  worker:
+    build: app
+    command: celery -A rwanda worker -l INFO --autoscale=10,1 --time-limit=3600
+    volumes:
+      - ./app:/app
+    depends_on:
+      - redis
+      - db
+    env_file: app/.env
+    restart: unless-stopped
+
+  scheduler:
+    build: app
+    command: celery -A rwanda beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./app:/app
+    depends_on:
+      - redis
+      - db
+    env_file: app/.env
+    restart: unless-stopped
+  
+  nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - ./app/nginx:/etc/nginx/conf.d
+      - ./app/static:/app/static
+      - ./app/media:/app/media
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rwanda.rule=Host(`app.rwanda.danielblandes.com`)
+      - traefik.http.routers.rwanda.tls=true
+      - traefik.http.routers.rwanda.tls.certresolver=le
+    networks:
+      - default
+      - traefik-proxy
+    depends_on:
+      - app
+    restart: unless-stopped
+  
+  account:
+    build: account
+    volumes:
+      - ./account:/app
+    env_file: account/.env
+    restart: "no"
+
+  account-nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - ./account/nginx:/etc/nginx/conf.d
+      - ./account:/app
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rwanda-account.rule=Host(`rwanda.danielblandes.com`)
+      - traefik.http.routers.rwanda-account.tls=true
+      - traefik.http.routers.rwanda-account.tls.certresolver=le
+    networks:
+      - default
+      - traefik-proxy
+    restart: unless-stopped
+
+  admin:
+    build: admin
+    volumes:
+      - ./admin:/app
+    env_file: admin/.env
+    restart: "no"
+
+  admin-nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - ./admin/nginx:/etc/nginx/conf.d
+      - ./admin:/app
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rwanda-admin.rule=Host(`admin.rwanda.danielblandes.com`)
+      - traefik.http.routers.rwanda-admin.tls=true
+      - traefik.http.routers.rwanda-admin.tls.certresolver=le
+    networks:
+      - default
+      - traefik-proxy
+    restart: unless-stopped
+
+volumes:
+  db:
+  redis:
+  pgadmin:
+
+networks:
+  traefik-proxy:
+    external: true

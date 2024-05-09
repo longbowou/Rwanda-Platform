@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  app:
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+
+  pgadmin:
+    ports:
+      - "5050:80"
+
+  account:
+    command: yarn serve
+    ports:
+      - "3000:8080"
+
+  admin:
+    command: yarn serve
+    ports:
+      - "4000:8080"
